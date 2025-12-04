@@ -22,6 +22,9 @@ export default function HomePage() {
   useEffect(() => {
     const getInitialSession = async () => {
       const { data, error } = await supabaseClient.auth.getSession()
+      const token = data.session?.access_token;
+
+      console.log("access_token", token);
 
       setAuth({
         loading: false,
