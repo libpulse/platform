@@ -1,0 +1,117 @@
+openapi: 3.1.0
+x-stoplight:
+  id: 1x4ipstekin0w
+info:
+  title: LibPulse Platform API
+  version: 0.1.0
+  description: |
+    LibPulse Platform API — MVP version.
+    This specification describes the backend API for developer authentication
+    and future ingestion / dashboard services.
+servers:
+  - url: 'http://localhost:8080'
+    description: Local development
+tags:
+  - name: Me
+    description: Endpoints related to the authenticated user
+  - name: Health
+    description: API health endpoints (future extension)
+paths:
+  /api/v1/me:
+    get:
+      tags:
+        - Me
+      summary: Get current authenticated user
+      description: |
+        Return the authenticated user's profile based on the JWT token supplied in the Authorization header (`Bearer <token>`).
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized – missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      x-stoplight:
+        id: d9om0yu3ebh28
+      parameters:
+        - schema:
+            type: string
+          in: header
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      description: Authenticated user profile (from Supabase OAuth)
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique user identifier
+          example: 44f3ee7f-bd94-401f-9aa1-5f4e8878fde7
+        email:
+          type: string
+          format: email
+          example: magenta2127@gmail.com
+        name:
+          type: string
+          nullable: true
+          example: Magenta Qin
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: 'https://avatars.githubusercontent.com/u/123456?v=4'
+        provider:
+          type: string
+          example: github
+        createdAt:
+          type: string
+          format: date-time
+          example: '2025-12-01T22:10:13Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2025-12-02T20:53:03Z'
+      required:
+        - id
+        - email
+        - provider
+        - createdAt
+      x-stoplight:
+        id: cbluz1ujcurnu
+    ErrorResponse:
+      type: object
+      description: Standard error response
+      properties:
+        error:
+          type: string
+          example: Unauthorized
+        code:
+          type: string
+          example: unauthorized
+      required:
+        - error
+        - code
+      x-stoplight:
+        id: 7wotubcs0l2ll
+x-internal: false
