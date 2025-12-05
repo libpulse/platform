@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# 这里要明确指定输出文件名，例如 api
+cmd = "go build -o ./tmp/api ./"
+bin = "tmp/api"
+
+include_ext = ["go"]
+exclude_dir = ["tmp", "vendor"]
+
+[log]
+time = true
+
+[watch]
+directories = ["."]
+exclude_dir = ["tmp", "vendor"]
