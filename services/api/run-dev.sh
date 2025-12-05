@@ -9,4 +9,8 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 echo "Starting LibPulse API..."
-go run .
+if command -v air >/dev/null 2>&1; then
+  air
+else
+  go run .
+fi
