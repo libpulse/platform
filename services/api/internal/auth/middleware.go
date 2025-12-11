@@ -2,11 +2,11 @@ package auth
 
 import (
 	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	apierrors "github.com/libpulse/platform/services/api/internal/utils/errors"
 )
 
 // This will be used as the key in Gin Context claims
@@ -31,12 +31,11 @@ type ErrorResponse struct {
 // NewMiddleware will return a Gin middleware to verify Supabase JWT
 func NewMiddleware(jwtSecret []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Check Authorization Header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{
-				Error: "Missing or invalid Authorization header",
-				Code:  "Unauthorized",
-			})
+			apiErr := apierrors.NewAPIError(apierrors.ErrUnauthorized)
+			c.AbortWithStatusJSON(apiErr.StatusCode(), apiErr)
 			return
 		}
 
@@ -44,24 +43,23 @@ func NewMiddleware(jwtSecret []byte) gin.HandlerFunc {
 
 		token, err := jwt.ParseWithClaims(tokenStr, &SupabaseClaims{}, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("Unexpected signing method")
+				return nil, errors.New("unexpected signing method")
 			}
 			return jwtSecret, nil
 		})
+
+		// Check whether the token is valid
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{
-				Error: "Invalid token",
-				Code:  "Unauthorized",
-			})
+			apiErr := apierrors.NewAPIError(apierrors.ErrInvalidToken)
+			c.AbortWithStatusJSON(apiErr.StatusCode(), apiErr)
 			return
 		}
 
+		// Check the claims structure.
 		claims, ok := token.Claims.(*SupabaseClaims)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, ErrorResponse{
-				Error: "invalid token claims",
-				Code:  "unauthorized",
-			})
+			apiErr := apierrors.NewAPIError(apierrors.ErrInvalidToken)
+			c.AbortWithStatusJSON(apiErr.StatusCode(), apiErr)
 			return
 		}
 
