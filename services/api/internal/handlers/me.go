@@ -7,6 +7,7 @@ import (
 
 	"github.com/libpulse/platform/services/api/internal/auth"
 	"github.com/libpulse/platform/services/api/internal/supabase"
+	"github.com/libpulse/platform/services/api/internal/utils/errors"
 )
 
 type ErrorResponse struct {
@@ -17,30 +18,14 @@ type ErrorResponse struct {
 // Get User info when authenticated: /api/v1/me
 func GetCurrentUserHandler(sb *supabase.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		claimsAny, ok := c.Get(auth.ContextKeyClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: "no auth context",
-				Code:  "unauthorized",
-			})
-			return
-		}
-
-		claims, ok := claimsAny.(*auth.SupabaseClaims)
-		if !ok || claims.Subject == "" {
-			c.JSON(http.StatusUnauthorized, ErrorResponse{
-				Error: "invalid auth context",
-				Code:  "unauthorized",
-			})
-			return
-		}
+		// Get claims from context (set by auth middleware)
+		claimsAny, _ := c.Get(auth.ContextKeyClaims)
+		claims := claimsAny.(*auth.SupabaseClaims)
 
 		user, err := sb.GetUserByID(c.Request.Context(), claims.Subject)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error: "failed to fetch user",
-				Code:  "internal_error",
-			})
+			apiErr := errors.NewAPIError(errors.ErrInternalError)
+			c.JSON(apiErr.StatusCode(), apiErr)
 			return
 		}
 
