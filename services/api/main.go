@@ -74,9 +74,12 @@ func main() {
 
 	// Protected API routes
 	api := r.Group("/api/v1")
+	// Create Adapter Store
+	userStore := &supabase.UserStore{Client: sbClient}
+
 	api.Use(auth.NewMiddleware(cfg.JWTSecret))
 	{
-		api.GET("/me", handlers.GetCurrentUserHandler(sbClient))
+		api.GET("/me", handlers.GetCurrentUserHandler(userStore))
 	}
 
 	addr := ":8080"
