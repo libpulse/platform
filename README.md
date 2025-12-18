@@ -28,6 +28,12 @@ This repository contains the **core LibPulse platform**, including both backend 
 👉 **Language SDKs are developed in separate repositories**.  
 This repository intentionally focuses on the **platform core**, while SDKs evolve independently per language and ecosystem.
 
+## Architecture Overview
+
+LibPulse separates control plane and telemetry ingestion so devtool maintainers can understand real-world usage without turning analytics into a nightmare.
+
+![LibPulse Architecture Overview](docs/architecture/overall.png)
+
 ## Why LibPulse?
 
 If you're building a devtool (CLI, SDK, or infrastructure product), you probably want to know:
