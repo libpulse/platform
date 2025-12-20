@@ -1,0 +1,23 @@
+---
+config:
+  layout: dagre
+---
+flowchart LR
+ subgraph Production["Production"]
+        H["HTTP Handler"]
+        I(("UserStore interface"))
+        A["SupabaseUserStore - adapter"]
+        S["Supabase Client"]
+  end
+ subgraph Unit_Test["Unit_Test"]
+        T["Test Case"]
+        M["MockUserStore"]
+  end
+    H -- depends on interface --> I
+    A -- implements UserStore --> I
+    A -- delegates to Supabase --> S
+    T -- invokes --> H
+    M -- implements UserStore --> I
+
+    style Unit_Test fill:#C8E6C9,stroke:none
+    style Production stroke:none,fill:#BBDEFB
