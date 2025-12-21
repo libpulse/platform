@@ -92,6 +92,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict - project with this name already exists for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate_project_name:
+                  summary: Duplicate project name
+                  value:
+                    error: Resource already exists
+                    code: conflict
         '500':
           description: Unexpected server error
           content:
