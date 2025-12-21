@@ -11,11 +11,15 @@ info:
 servers:
   - url: 'http://localhost:8080'
     description: Local development
+
 tags:
   - name: Me
     description: Endpoints related to the authenticated user
+  - name: Projects
+    description: Project management endpoints
   - name: Health
     description: API health endpoints (future extension)
+
 paths:
   /api/v1/me:
     get:
@@ -48,16 +52,72 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
       x-stoplight:
         id: d9om0yu3ebh28
-      parameters:
-        - schema:
-            type: string
-          in: header
+
+  /api/v1/projects:
+    post:
+      tags:
+        - Projects
+      summary: Create project
+      description: |
+        Create a new project for the authenticated user.
+      operationId: createProject
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+            examples:
+              demo:
+                value:
+                  name: demo
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateProjectResponse'
+        '400':
+          description: Bad Request - invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict - project with this name already exists for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate_project_name:
+                  summary: Duplicate project name
+                  value:
+                    error: Resource already exists
+                    code: conflict
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   schemas:
     User:
       type: object
@@ -99,6 +159,32 @@ components:
         - createdAt
       x-stoplight:
         id: cbluz1ujcurnu
+
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Project name
+          minLength: 1
+          maxLength: 64
+          example: demo
+
+    CreateProjectResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Project ID
+          example: 3b7bff9f-9a1f-4c2e-a6c8-6f8c2e3d4b55
+
     ErrorResponse:
       type: object
       description: Standard error response
@@ -114,4 +200,5 @@ components:
         - code
       x-stoplight:
         id: 7wotubcs0l2ll
+
 x-internal: false

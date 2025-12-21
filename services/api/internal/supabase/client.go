@@ -40,14 +40,17 @@ type supabaseUserResponse struct {
 // Client Wrapper
 type Client struct {
 	BaseAuthURL    string
+	BaseRestURL    string
 	ServiceRoleKey string
 	httpClient     *http.Client
 }
 
 // authBaseURL. e.g. https://<project-id>.supabase.co/auth/v1
-func NewClient(authBaseURL, serviceRoleKey string) *Client {
+// restBaseURL. e.g. https://<project-id>.supabase.co/rest/v1
+func NewClient(authBaseURL, restBaseURL, serviceRoleKey string) *Client {
 	return &Client{
 		BaseAuthURL:    strings.TrimRight(authBaseURL, "/"),
+		BaseRestURL:    strings.TrimRight(restBaseURL, "/"),
 		ServiceRoleKey: serviceRoleKey,
 		httpClient:     &http.Client{Timeout: 5 * time.Second},
 	}

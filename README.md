@@ -88,6 +88,7 @@ For environment variables, you need to a create a `.env.dev` file in the reposit
 SUPABASE_JWT_SECRET=XXX
 SUPABASE_SERVICE_ROLE_KEY=XXX
 SUPABASE_AUTH_URL=XXX
+SUPABASE_PROJECT_URL=XXX
 ```
 Also, in `.env.dev` file, you need to set your CORS origins, like this:
 ```shell
@@ -96,6 +97,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000
 Where to find these values:
 	•	SUPABASE_SERVICE_ROLE_KEY:  Project Settings → API Keys → Legacy anon, service_role API keys → service_role
 	•	SUPABASE_JWT_SECRET: Project Settings → JWT Keys → Legacy JWT Secret
+	•	SUPABASE_PROJECT_URL: https://<project-ref>.supabase.co (same as NEXT_PUBLIC_SUPABASE_URL)
 	•	SUPABASE_AUTH_URL: ${SUPABASE_PROJECT_URL}/auth/v1
 
 > NOTED: SUPABASE_SERVICE_ROLE_KEY is sensitive. Keep it in .env.dev only and never commit it.
