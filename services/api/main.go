@@ -17,14 +17,16 @@ type Config struct {
 	JWTSecret      []byte
 	ServiceRoleKey string
 	AuthBaseURL    string
+	ProjectURL     string
 }
 
 func loadConfigFromEnv() (*Config, error) {
 	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
 	serviceRole := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 	authURL := os.Getenv("SUPABASE_AUTH_URL")
+	projectURL := os.Getenv("SUPABASE_PROJECT_URL")
 
-	if jwtSecret == "" || serviceRole == "" || authURL == "" {
+	if jwtSecret == "" || serviceRole == "" || authURL == "" || projectURL == "" {
 		return nil, ErrMissingEnv
 	}
 
@@ -32,10 +34,11 @@ func loadConfigFromEnv() (*Config, error) {
 		JWTSecret:      []byte(jwtSecret),
 		ServiceRoleKey: serviceRole,
 		AuthBaseURL:    authURL,
+		ProjectURL:     projectURL,
 	}, nil
 }
 
-var ErrMissingEnv = &configError{"SUPABASE_JWT_SECRET, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_AUTH_URL must be set"}
+var ErrMissingEnv = &configError{"SUPABASE_JWT_SECRET, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_AUTH_URL, SUPABASE_PROJECT_URL must be set"}
 
 type configError struct{ msg string }
 
@@ -48,7 +51,8 @@ func main() {
 	}
 
 	// Supabase Admin API client
-	sbClient := supabase.NewClient(cfg.AuthBaseURL, cfg.ServiceRoleKey)
+	restURL := cfg.ProjectURL + "/rest/v1"
+	sbClient := supabase.NewClient(cfg.AuthBaseURL, restURL, cfg.ServiceRoleKey)
 
 	// Gin router
 	r := gin.Default()
@@ -74,12 +78,14 @@ func main() {
 
 	// Protected API routes
 	api := r.Group("/api/v1")
-	// Create Adapter Store
+	// Create Adapter Stores
 	userStore := &supabase.UserStore{Client: sbClient}
+	projectStore := &supabase.ProjectStore{Client: sbClient}
 
 	api.Use(auth.NewMiddleware(cfg.JWTSecret))
 	{
 		api.GET("/me", handlers.GetCurrentUserHandler(userStore))
+		api.POST("/projects", handlers.CreateProjectHandler(projectStore))
 	}
 
 	addr := ":8080"
