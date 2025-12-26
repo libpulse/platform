@@ -11,6 +11,7 @@ import (
 	"github.com/libpulse/platform/services/api/internal/config"
 	"github.com/libpulse/platform/services/api/internal/handlers"
 	"github.com/libpulse/platform/services/api/internal/supabase"
+	"github.com/libpulse/platform/services/api/internal/utils/crypto"
 )
 
 type Config struct {
@@ -18,6 +19,7 @@ type Config struct {
 	ServiceRoleKey string
 	AuthBaseURL    string
 	ProjectURL     string
+	SecretPepper   string
 }
 
 func loadConfigFromEnv() (*Config, error) {
@@ -25,8 +27,9 @@ func loadConfigFromEnv() (*Config, error) {
 	serviceRole := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 	authURL := os.Getenv("SUPABASE_AUTH_URL")
 	projectURL := os.Getenv("SUPABASE_PROJECT_URL")
+	secretPepper := os.Getenv("LIBPULSE_SECRET_PEPPER")
 
-	if jwtSecret == "" || serviceRole == "" || authURL == "" || projectURL == "" {
+	if jwtSecret == "" || serviceRole == "" || authURL == "" || projectURL == "" || secretPepper == "" {
 		return nil, ErrMissingEnv
 	}
 
@@ -35,10 +38,11 @@ func loadConfigFromEnv() (*Config, error) {
 		ServiceRoleKey: serviceRole,
 		AuthBaseURL:    authURL,
 		ProjectURL:     projectURL,
+		SecretPepper:   secretPepper,
 	}, nil
 }
 
-var ErrMissingEnv = &configError{"SUPABASE_JWT_SECRET, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_AUTH_URL, SUPABASE_PROJECT_URL must be set"}
+var ErrMissingEnv = &configError{"SUPABASE_JWT_SECRET, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_AUTH_URL, SUPABASE_PROJECT_URL, LIBPULSE_SECRET_PEPPER must be set"}
 
 type configError struct{ msg string }
 
@@ -49,6 +53,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
+
+	// Initialize crypto package with secret pepper
+	crypto.Init(cfg.SecretPepper)
 
 	// Supabase Admin API client
 	restURL := cfg.ProjectURL + "/rest/v1"
@@ -81,11 +88,13 @@ func main() {
 	// Create Adapter Stores
 	userStore := &supabase.UserStore{Client: sbClient}
 	projectStore := &supabase.ProjectStore{Client: sbClient}
+	projectKeyStore := &supabase.ProjectKeyStore{Client: sbClient}
 
 	api.Use(auth.NewMiddleware(cfg.JWTSecret))
 	{
 		api.GET("/me", handlers.GetCurrentUserHandler(userStore))
 		api.POST("/projects", handlers.CreateProjectHandler(projectStore))
+		api.POST("/projects/:id/keys", handlers.CreateProjectKeyHandler(projectStore, projectKeyStore))
 	}
 
 	addr := ":8080"
