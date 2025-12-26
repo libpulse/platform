@@ -111,7 +111,13 @@ paths:
       summary: Create project key
       description: |
         Issue a new key for a project.
-        Only project owner/admin can create keys.
+        Only the project owner can create keys.
+
+        **Rate Limits:**
+        - Maximum 3 key creations per minute (burst protection)
+        - Maximum 5 key creations per day (daily quota)
+
+        Both limits must be satisfied. Exceeding either limit returns HTTP 429.
       operationId: createProjectKey
       security:
         - bearerAuth: []
@@ -173,7 +179,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: Rate limited
+          description: Rate limit exceeded (either 3/minute or 5/day limit)
           content:
             application/json:
               schema:
