@@ -34,6 +34,34 @@ LibPulse separates control plane and telemetry ingestion so devtool maintainers 
 
 ![LibPulse Architecture Overview](docs/architecture/overall.png)
 
+## API Rate Limiting
+
+The LibPulse platform API implements rate limiting to protect against abuse and ensure fair resource allocation.
+
+### Project Key Creation Limits
+
+When creating project API keys (`POST /api/v1/projects/{id}/keys`), the following limits apply per user:
+
+- **Burst Protection**: Maximum 3 key creations per minute
+- **Daily Quota**: Maximum 5 key creations per day
+
+Both limits must be satisfied. If either limit is exceeded, the API returns HTTP 429 (Too Many Requests).
+
+**Implementation Details:**
+- Rate limits are tracked per authenticated user (based on JWT subject)
+- Limits reset automatically after their respective time windows (1 minute / 24 hours)
+- For MVP, we use in-memory storage. In the future, we will migrate to Redis-based disttributed rate limiting.
+
+**Example Response (429):**
+```json
+{
+  "error": "Too many requests - rate limit exceeded",
+  "code": "too_many_requests"
+}
+```
+
+See [openapi.yaml](services/api/openapi.yaml) for complete API documentation.
+
 ## Why LibPulse?
 
 If you're building a devtool (CLI, SDK, or infrastructure product), you probably want to know:
