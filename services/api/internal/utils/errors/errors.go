@@ -33,10 +33,25 @@ var ErrorMapping = map[ErrorCode]*APIError{
 		Code:   ErrBadRequest,
 		Status: http.StatusBadRequest,
 	},
+	ErrForbidden: {
+		Error:  "Forbidden - insufficient permissions",
+		Code:   ErrForbidden,
+		Status: http.StatusForbidden,
+	},
+	ErrNotFound: {
+		Error:  "Resource not found",
+		Code:   ErrNotFound,
+		Status: http.StatusNotFound,
+	},
 	ErrConflict: {
 		Error:  "Resource already exists",
 		Code:   ErrConflict,
 		Status: http.StatusConflict,
+	},
+	ErrTooManyRequests: {
+		Error:  "Too many requests - rate limit exceeded",
+		Code:   ErrTooManyRequests,
+		Status: http.StatusTooManyRequests,
 	},
 	ErrInternalError: {
 		Error:  "Internal server error",

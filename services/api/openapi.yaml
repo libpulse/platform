@@ -1,6 +1,7 @@
 openapi: 3.1.0
 x-stoplight:
   id: 1x4ipstekin0w
+
 info:
   title: LibPulse Platform API
   version: 0.1.0
@@ -8,6 +9,7 @@ info:
     LibPulse Platform API — MVP version.
     This specification describes the backend API for developer authentication
     and future ingestion / dashboard services.
+
 servers:
   - url: 'http://localhost:8080'
     description: Local development
@@ -23,11 +25,11 @@ tags:
 paths:
   /api/v1/me:
     get:
-      tags:
-        - Me
+      tags: [Me]
       summary: Get current authenticated user
       description: |
-        Return the authenticated user's profile based on the JWT token supplied in the Authorization header (`Bearer <token>`).
+        Return the authenticated user's profile based on the JWT token supplied
+        in the Authorization header (`Bearer <token>`).
       operationId: getCurrentUser
       security:
         - bearerAuth: []
@@ -39,7 +41,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
         '401':
-          description: Unauthorized – missing or invalid token
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -55,11 +57,9 @@ paths:
 
   /api/v1/projects:
     post:
-      tags:
-        - Projects
+      tags: [Projects]
       summary: Create project
-      description: |
-        Create a new project for the authenticated user.
+      description: Create a new project for the authenticated user.
       operationId: createProject
       security:
         - bearerAuth: []
@@ -81,29 +81,109 @@ paths:
               schema:
                 $ref: '#/components/schemas/CreateProjectResponse'
         '400':
-          description: Bad Request - invalid payload
+          description: Bad Request
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Unauthorized - missing or invalid token
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Conflict - project with this name already exists for the user
+          description: Conflict - duplicate project name
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                duplicate_project_name:
-                  summary: Duplicate project name
-                  value:
-                    error: Resource already exists
-                    code: conflict
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/projects/{id}/keys:
+    post:
+      tags: [Projects]
+      summary: Create project key
+      description: |
+        Issue a new key for a project.
+        Only the project owner can create keys.
+
+        **Rate Limits:**
+        - Maximum 3 key creations per minute (burst protection)
+        - Maximum 5 key creations per day (daily quota)
+
+        Both limits must be satisfied. Exceeding either limit returns HTTP 429.
+      operationId: createProjectKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Project ID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectKeyRequest'
+            examples:
+              ciProd:
+                value:
+                  label: pixi-prod-ci
+                  env: prod
+                  require_signature: true
+                  scopes: [ingest]
+      responses:
+        '201':
+          description: Created
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateProjectKeyResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded (either 3/minute or 5/day limit)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Unexpected server error
           content:
@@ -121,83 +201,117 @@ components:
   schemas:
     User:
       type: object
-      description: Authenticated user profile (from Supabase OAuth)
+      description: Authenticated user profile
+      required: [id, email, provider, createdAt]
       properties:
         id:
           type: string
           format: uuid
-          description: Unique user identifier
-          example: 44f3ee7f-bd94-401f-9aa1-5f4e8878fde7
         email:
           type: string
           format: email
-          example: magenta2127@gmail.com
         name:
           type: string
           nullable: true
-          example: Magenta Qin
         avatarUrl:
           type: string
           format: uri
           nullable: true
-          example: 'https://avatars.githubusercontent.com/u/123456?v=4'
         provider:
           type: string
-          example: github
         createdAt:
           type: string
           format: date-time
-          example: '2025-12-01T22:10:13Z'
         updatedAt:
           type: string
           format: date-time
-          example: '2025-12-02T20:53:03Z'
-      required:
-        - id
-        - email
-        - provider
-        - createdAt
       x-stoplight:
         id: cbluz1ujcurnu
 
     CreateProjectRequest:
       type: object
-      additionalProperties: false
-      required:
-        - name
+      required: [name]
       properties:
         name:
           type: string
-          description: Project name
           minLength: 1
           maxLength: 64
-          example: demo
 
     CreateProjectResponse:
       type: object
-      additionalProperties: false
-      required:
-        - id
+      required: [id]
       properties:
         id:
           type: string
           format: uuid
-          description: Project ID
-          example: 3b7bff9f-9a1f-4c2e-a6c8-6f8c2e3d4b55
+
+    ProjectKeyScope:
+      type: string
+      enum: [ingest]
+
+    CreateProjectKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 64
+        require_signature:
+          type: boolean
+          default: false
+        env:
+          type: string
+          nullable: true
+        scopes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ProjectKeyScope'
+          default: [ingest]
+
+    ProjectKey:
+      type: object
+      required: [id, label, scopes, secret_last4, created_at]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        env:
+          type: string
+          nullable: true
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectKeyScope'
+        secret_last4:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateProjectKeyResponse:
+      type: object
+      required: [project_key_public, key]
+      properties:
+        project_key_public:
+          type: string
+        project_secret:
+          type: string
+          nullable: true
+        key:
+          $ref: '#/components/schemas/ProjectKey'
 
     ErrorResponse:
       type: object
-      description: Standard error response
+      required: [error, code]
       properties:
         error:
           type: string
-          example: Unauthorized
         code:
           type: string
-          example: unauthorized
-      required:
-        - error
-        - code
       x-stoplight:
         id: 7wotubcs0l2ll
 

@@ -34,6 +34,34 @@ LibPulse separates control plane and telemetry ingestion so devtool maintainers 
 
 ![LibPulse Architecture Overview](docs/architecture/overall.png)
 
+## API Rate Limiting
+
+The LibPulse platform API implements rate limiting to protect against abuse and ensure fair resource allocation.
+
+### Project Key Creation Limits
+
+When creating project API keys (`POST /api/v1/projects/{id}/keys`), the following limits apply per user:
+
+- **Burst Protection**: Maximum 3 key creations per minute
+- **Daily Quota**: Maximum 5 key creations per day
+
+Both limits must be satisfied. If either limit is exceeded, the API returns HTTP 429 (Too Many Requests).
+
+**Implementation Details:**
+- Rate limits are tracked per authenticated user (based on JWT subject)
+- Limits reset automatically after their respective time windows (1 minute / 24 hours)
+- For MVP, we use in-memory storage. In the future, we will migrate to Redis-based disttributed rate limiting.
+
+**Example Response (429):**
+```json
+{
+  "error": "Too many requests - rate limit exceeded",
+  "code": "too_many_requests"
+}
+```
+
+See [openapi.yaml](services/api/openapi.yaml) for complete API documentation.
+
 ## Why LibPulse?
 
 If you're building a devtool (CLI, SDK, or infrastructure product), you probably want to know:
@@ -89,6 +117,7 @@ SUPABASE_JWT_SECRET=XXX
 SUPABASE_SERVICE_ROLE_KEY=XXX
 SUPABASE_AUTH_URL=XXX
 SUPABASE_PROJECT_URL=XXX
+LIBPULSE_SECRET_PEPPER=your-random-secret-pepper-here
 ```
 Also, in `.env.dev` file, you need to set your CORS origins, like this:
 ```shell
@@ -99,8 +128,9 @@ Where to find these values:
 	•	SUPABASE_JWT_SECRET: Project Settings → JWT Keys → Legacy JWT Secret
 	•	SUPABASE_PROJECT_URL: https://<project-ref>.supabase.co (same as NEXT_PUBLIC_SUPABASE_URL)
 	•	SUPABASE_AUTH_URL: ${SUPABASE_PROJECT_URL}/auth/v1
+	•	LIBPULSE_SECRET_PEPPER: A random string used as the secret key for HMAC-SHA256 hashing of project secrets. Generate a strong random value (minimum 32 characters recommended).
 
-> NOTED: SUPABASE_SERVICE_ROLE_KEY is sensitive. Keep it in .env.dev only and never commit it.
+> NOTED: SUPABASE_SERVICE_ROLE_KEY and LIBPULSE_SECRET_PEPPER are sensitive. Keep them in .env.dev only and never commit them.
 
 
 ### Apply schema to your Supabase project
