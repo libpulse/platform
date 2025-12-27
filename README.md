@@ -117,6 +117,7 @@ SUPABASE_JWT_SECRET=XXX
 SUPABASE_SERVICE_ROLE_KEY=XXX
 SUPABASE_AUTH_URL=XXX
 SUPABASE_PROJECT_URL=XXX
+LIBPULSE_SECRET_PEPPER=your-random-secret-pepper-here
 ```
 Also, in `.env.dev` file, you need to set your CORS origins, like this:
 ```shell
@@ -127,8 +128,9 @@ Where to find these values:
 	•	SUPABASE_JWT_SECRET: Project Settings → JWT Keys → Legacy JWT Secret
 	•	SUPABASE_PROJECT_URL: https://<project-ref>.supabase.co (same as NEXT_PUBLIC_SUPABASE_URL)
 	•	SUPABASE_AUTH_URL: ${SUPABASE_PROJECT_URL}/auth/v1
+	•	LIBPULSE_SECRET_PEPPER: A random string used as the secret key for HMAC-SHA256 hashing of project secrets. Generate a strong random value (minimum 32 characters recommended).
 
-> NOTED: SUPABASE_SERVICE_ROLE_KEY is sensitive. Keep it in .env.dev only and never commit it.
+> NOTED: SUPABASE_SERVICE_ROLE_KEY and LIBPULSE_SECRET_PEPPER are sensitive. Keep them in .env.dev only and never commit them.
 
 
 ### Apply schema to your Supabase project
