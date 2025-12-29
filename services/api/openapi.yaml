@@ -138,7 +138,7 @@ paths:
             examples:
               ciProd:
                 value:
-                  label: pixi-prod-ci
+                  label: libpulse-prod-ci
                   env: prod
                   require_signature: true
                   scopes: [ingest]
@@ -191,6 +191,137 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/ingest:
+    post:
+      tags:
+        - Ingest
+      summary: Ingest events (single or batch)
+      description: |
+        Ingest telemetry events for a project. Supports sending a single event object or a batch array (max 100).
+        
+        Authentication:
+        - X-Pulse-Key identifies the project key (pk_live_...).
+        - X-Pulse-Timestamp and X-Pulse-Signature are reserved for HMAC signing (optional for MVP).
+        
+        Limits (MVP defaults):
+        - Max request body: 256KB
+        - Max batch size: 100
+      operationId: ingestEvents
+      parameters:
+        - name: X-Pulse-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Project public key (pk_live_...)
+          example: pk_live_8f3aKZabcDEFghiJKLmnoPqrsTUVwxYZ
+        - name: X-Pulse-Timestamp
+          in: header
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339/ISO8601 UTC timestamp used for signature / replay protection
+          example: "2025-11-07T15:10:00Z"
+        - name: X-Pulse-Signature
+          in: header
+          required: false
+          schema:
+            type: string
+          description: "Signature header, format: v1=<hex-digest> (optional for MVP)"
+          example: v1=2f3c9a0b1c2d3e4f...
+        - name: Content-Encoding
+          in: header
+          required: false
+          schema:
+            type: string
+            enum: [gzip]
+          description: Optional gzip compression
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestRequest'
+            examples:
+              single:
+                summary: Single event
+                value:
+                  event_type: error
+                  event_name: "file_read_failed"
+                  version: "1.2.3"
+                  event_ts: "2025-11-07T15:10:00Z"
+                  props:
+                    message: "file not found"
+                    code: "ENOENT"
+                    severity: "error"
+                  sdk:
+                    name: "libpulse-rs"
+                    version: "0.1.0"
+                    os: "macOS"
+                    arch: "arm64"
+                    language: "rust"
+                    runtime: "rustc 1.82.0"
+                  event_id: "9e0a3c32-1c1c-4f39-b3b8-5b8d1a3d2a55"
+              batch:
+                summary: Batch events (<=100)
+                value:
+                  - event_type: user_action
+                    event_name: button_clicked
+                    version: "1.2.3"
+                    event_ts: "2025-11-07T15:10:00Z"
+                    props:
+                      action: clicked
+                  - event_type: error
+                    event_name: request_timeout
+                    event_ts: "2025-11-07T15:10:01Z"
+                    props:
+                      message: timeout
+                      severity: warn
+      responses:
+        '200':
+          description: Accepted (single or batch)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/IngestResponseSingle'
+                  - $ref: '#/components/schemas/IngestResponseBatch'
+        '400':
+          description: Bad Request - invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid key or invalid signature (if enabled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload Too Large - request exceeds size limits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests - rate limited
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds to wait before retrying
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -303,6 +434,256 @@ components:
           nullable: true
         key:
           $ref: '#/components/schemas/ProjectKey'
+
+    IngestRequest:
+      description: Single event object or a batch array (max 100).
+      oneOf:
+        - $ref: '#/components/schemas/IngestEvent'
+        - type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/IngestEvent'
+
+    IngestEvent:
+      type: object
+      required:
+        - event_type
+        - event_ts
+        - event_name
+        - props
+      properties:
+        event_type:
+          type: string
+          enum: [error, perf, user_action]
+          description: |
+            Event type (high-level category):
+            - `error`: Errors, warnings, failures
+            - `perf`: Performance measurements (latency, memory, etc.)
+            - `user_action`: User interactions and behavior
+          example: error
+        event_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: |
+            Specific event name (detailed identifier).
+            Use snake_case for consistency.
+            Examples: "libpulse_upload_to_aws", "file_read_failed", "button_clicked"
+          example: "libpulse_upload_to_aws"
+        version:
+          type: string
+          nullable: true
+          description: Project/library version; if absent, server may store "unknown"
+          example: "1.2.3"
+        event_ts:
+          type: string
+          format: date-time
+          description: Event timestamp (when it happened on client)
+          example: "2025-11-07T15:10:00Z"
+        event_id:
+          type: string
+          description: Optional idempotency id (UUID/ULID)
+          example: "9e0a3c32-1c1c-4f39-b3b8-5b8d1a3d2a55"
+        props:
+          $ref: '#/components/schemas/IngestProps'
+        sdk:
+          $ref: '#/components/schemas/SdkInfo'
+      additionalProperties: false
+    
+    IngestProps:
+      type: object
+      description: |
+        Event properties (MVP).
+        Only the predefined fields are allowed.
+        Nested objects/arrays are NOT allowed.
+      additionalProperties: false
+      properties:
+        # Error-related (for event_type=error)
+        severity:
+          type: string
+          enum: [warn, error, fatal]
+          description: Severity for error events.
+        code:
+          type: string
+          description: Error code (e.g., ENOENT).
+        message:
+          type: string
+          description: Error message (<= 4KB recommended).
+        stack:
+          type: string
+          description: Stack trace (<= 16KB, may be truncated).
+        file:
+          type: string
+          description: Source file.
+        line:
+          type: number
+          description: Source line.
+
+        # Performance (for event_type=perf)
+        duration_ms:
+          type: number
+          description: Duration in milliseconds.
+
+        # User actions (for event_type=user_action)
+        action:
+          type: string
+          description: Action name (e.g., clicked).
+
+        # Identity / correlation
+        user_id:
+          type: string
+          description: Anonymous user identifier.
+        session_id:
+          type: string
+          description: Session identifier.
+        trace_id:
+          type: string
+          description: Trace/task identifier.
+
+        # Environment / command
+        os:
+          type: string
+          description: Runtime OS.
+        op:
+          type: string
+          description: Operation name (e.g., libpulse_upload).
+        variant:
+          type: string
+          description: Subcommand/mode.
+        args_sig:
+          type: string
+          description: CLI arguments signature (flags only).
+        args_count:
+          type: number
+          description: Number of arguments.
+        surface:
+          type: string
+          enum: [cli, ci, ide, gui, api, daemon]
+          description: Entry surface of the event.
+
+      example:
+        severity: error
+        code: ENOENT
+        message: file not found
+        op: libpulse_upload
+        variant: aws
+        args_count: 3
+        surface: cli
+
+    SdkInfo:
+      type: object
+      description: SDK metadata
+      properties:
+        name:
+          type: string
+          example: libpulse-rs
+        version:
+          type: string
+          example: "0.1.0"
+        os:
+          type: string
+          example: macOS
+        arch:
+          type: string
+          example: arm64
+        language:
+          type: string
+          example: rust
+        runtime:
+          type: string
+          example: rustc 1.82.0
+      additionalProperties: false
+
+    RateLimitInfo:
+      type: object
+      properties:
+        limit:
+          type: integer
+          example: 1000
+        remaining:
+          type: integer
+          example: 983
+        reset:
+          type: string
+          format: date-time
+          example: "2025-11-09T10:15:00Z"
+      additionalProperties: false
+
+    IngestResponseSingle:
+      type: object
+      description: Response for single event ingest
+      properties:
+        ok:
+          type: boolean
+          example: true
+        request_id:
+          type: string
+          example: req_01JFA8F0Z3K8V9G8Y2
+        server_time:
+          type: string
+          format: date-time
+          example: "2025-11-09T10:00:02Z"
+        rate_limit:
+          $ref: '#/components/schemas/RateLimitInfo'
+        warnings:
+          type: array
+          items:
+            type: string
+          description: Reserved for MVP (e.g. stack_truncated, sanitized_keys)
+          example: []
+      required: [ok, request_id, server_time]
+      additionalProperties: false
+
+    IngestErrorItem:
+      type: object
+      properties:
+        index:
+          type: integer
+          description: Index of failed event in the batch array
+          example: 3
+        error:
+          type: string
+          description: Machine-readable error code
+          example: invalid_payload
+        message:
+          type: string
+          description: Human-readable message
+          example: props.severity must be one of ["warn","error","fatal"]
+      required: [index, error]
+      additionalProperties: false
+
+    IngestResponseBatch:
+      type: object
+      description: Response for batch ingest
+      properties:
+        ok:
+          type: boolean
+          example: true
+        accepted:
+          type: integer
+          example: 97
+        failed:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngestErrorItem'
+          example:
+            - index: 3
+              error: invalid_payload
+              message: props.severity must be one of ["warn","error","fatal"]
+            - index: 5
+              error: value_too_long
+              message: stack exceeds 16384 bytes
+        request_id:
+          type: string
+          example: req_01JFA8F0Z3K8V9G8Y2
+        server_time:
+          type: string
+          format: date-time
+          example: "2025-11-09T10:00:02Z"
+        rate_limit:
+          $ref: '#/components/schemas/RateLimitInfo'
+      required: [ok, accepted, failed, request_id, server_time]
+      additionalProperties: false
 
     ErrorResponse:
       type: object
