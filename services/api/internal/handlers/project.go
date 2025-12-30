@@ -276,20 +276,29 @@ func CreateProjectKeyHandler(projectStore ProjectStore, keyStore ProjectKeyStore
 			return
 		}
 
-		// 9) Hash secret and get last4
-		secretHash := crypto.HashSecret(secret)
-		secretLast4 := crypto.GetLast4(secret)
+		// 9) Encrypt and hash secret
+		// Encrypt: AES-GCM with master key (can be decrypted for signature verification)
+		secretEncrypted, err := crypto.EncryptSecret(secret)
+		if err != nil {
+			log.Printf("Failed to encrypt secret: %s", err.Error())
+			apiErr := errors.NewAPIError(errors.ErrInternalError)
+			c.JSON(apiErr.StatusCode(), apiErr)
+			return
+		}
+
+		// Hash: HMAC-SHA256 with pepper (one-way fingerprint)
+		secretFingerprint := crypto.HashSecret(secret)
 
 		// 10) Create project key in database
 		keyParams := supabase.CreateProjectKeyParams{
-			ProjectID:   projectID,
-			Label:       req.Label,
-			Env:         env,
-			SignedOnly:  req.RequireSignature,
-			PublicKey:   publicKey,
-			SecretHash:  secretHash,
-			SecretLast4: secretLast4,
-			CreatedBy:   claims.Subject,
+			ProjectID:         projectID,
+			Label:             req.Label,
+			Env:               env,
+			SignedOnly:        req.RequireSignature,
+			PublicKey:         publicKey,
+			SecretEncrypted:   secretEncrypted,
+			SecretFingerprint: secretFingerprint,
+			CreatedBy:         claims.Subject,
 		}
 
 		projectKey, err := keyStore.CreateProjectKey(c.Request.Context(), keyParams)
@@ -308,6 +317,8 @@ func CreateProjectKeyHandler(projectStore ProjectStore, keyStore ProjectKeyStore
 
 		// 11) Build response with secret (shown only once)
 		c.Header("Cache-Control", "no-store")
+
+		secretLast4 := crypto.GetLast4(secret)
 
 		response := CreateProjectKeyResponse{
 			ProjectKeyPublic: publicKey,
