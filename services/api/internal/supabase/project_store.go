@@ -31,24 +31,44 @@ type ProjectKey struct {
 	Env               string     `json:"env"`
 	SignedOnly        bool       `json:"signed_only"`
 	PublicKey         string     `json:"public_key"`
-	SecretEnc         string     `json:"secret_enc"`        // Stores hashed secret
-	SecretFingerprint string     `json:"secret_fingerprint"` // Stores last4
+	SecretEnc         string     `json:"secret_enc"`         // Stores AES-GCM encrypted secret (can be decrypted)
+	SecretFingerprint string     `json:"secret_fingerprint"` // Stores HMAC-SHA256 hashed secret (one-way)
 	Disabled          bool       `json:"disabled"`
 	CreatedBy         string     `json:"created_by"`
 	CreatedAt         time.Time  `json:"created_at"`
 	LastUsedAt        *time.Time `json:"last_used_at,omitempty"`
 }
 
+// GetProjectID implements ProjectKeyInfo interface
+func (pk *ProjectKey) GetProjectID() string {
+	return pk.ProjectID
+}
+
+// IsDisabled implements ProjectKeyInfo interface
+func (pk *ProjectKey) IsDisabled() bool {
+	return pk.Disabled
+}
+
+// RequiresSignature implements ProjectKeyInfo interface
+func (pk *ProjectKey) RequiresSignature() bool {
+	return pk.SignedOnly
+}
+
+// GetSecretEncrypted implements ProjectKeyInfo interface
+func (pk *ProjectKey) GetSecretEncrypted() string {
+	return pk.SecretEnc
+}
+
 // CreateProjectKeyParams contains parameters for creating a project key
 type CreateProjectKeyParams struct {
-	ProjectID   string
-	Label       string
-	Env         string
-	SignedOnly  bool
-	PublicKey   string
-	SecretHash  string
-	SecretLast4 string
-	CreatedBy   string
+	ProjectID          string
+	Label              string
+	Env                string
+	SignedOnly         bool
+	PublicKey          string
+	SecretEncrypted    string // AES-GCM encrypted secret
+	SecretFingerprint  string // HMAC-SHA256 hashed secret
+	CreatedBy          string
 }
 
 // ProjectStore is a thin wrapper around Client that provides project-related data access.
@@ -174,8 +194,11 @@ func (s *ProjectKeyStore) CreateProjectKey(ctx context.Context, params CreatePro
 	if params.PublicKey == "" {
 		return nil, errors.New("public key cannot be empty")
 	}
-	if params.SecretHash == "" {
-		return nil, errors.New("secret hash cannot be empty")
+	if params.SecretEncrypted == "" {
+		return nil, errors.New("secret encrypted cannot be empty")
+	}
+	if params.SecretFingerprint == "" {
+		return nil, errors.New("secret fingerprint cannot be empty")
 	}
 
 	url := s.Client.BaseRestURL + "/project_keys"
@@ -186,8 +209,8 @@ func (s *ProjectKeyStore) CreateProjectKey(ctx context.Context, params CreatePro
 		"env":                params.Env,
 		"signed_only":        params.SignedOnly,
 		"public_key":         params.PublicKey,
-		"secret_enc":         params.SecretHash,
-		"secret_fingerprint": params.SecretLast4,
+		"secret_enc":         params.SecretEncrypted,
+		"secret_fingerprint": params.SecretFingerprint,
 		"created_by":         params.CreatedBy,
 	}
 
@@ -227,6 +250,48 @@ func (s *ProjectKeyStore) CreateProjectKey(ctx context.Context, params CreatePro
 
 	if len(keys) == 0 {
 		return nil, errors.New("no project key returned from database")
+	}
+
+	return &keys[0], nil
+}
+
+// GetProjectKeyByPublicKey => GET /rest/v1/project_keys?public_key=eq.<key>
+func (s *ProjectKeyStore) GetProjectKeyByPublicKey(ctx context.Context, publicKey string) (*ProjectKey, error) {
+	if publicKey == "" {
+		return nil, errors.New("public key cannot be empty")
+	}
+
+	url := s.Client.BaseRestURL + "/project_keys?public_key=eq." + publicKey + "&select=*"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Supabase REST API headers
+	req.Header.Set("apikey", s.Client.ServiceRoleKey)
+	req.Header.Set("Authorization", "Bearer "+s.Client.ServiceRoleKey)
+
+	resp, err := s.Client.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyStr := string(bodyBytes)
+		log.Printf("supabase rest api error: status=%d body=%s", resp.StatusCode, bodyStr)
+		return nil, errors.New(bodyStr)
+	}
+
+	var keys []ProjectKey
+	if err := json.NewDecoder(resp.Body).Decode(&keys); err != nil {
+		return nil, err
+	}
+
+	if len(keys) == 0 {
+		return nil, errors.New("project key not found")
 	}
 
 	return &keys[0], nil
